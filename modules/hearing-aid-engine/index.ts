@@ -1,11 +1,12 @@
 import { requireNativeModule } from 'expo-modules-core';
 
-const HearingAidEngine = requireNativeModule('HearingAidEngine');
-
-export function startHearingAid() {
-  HearingAidEngine.start();
+// Явно объявляем интерфейс нашего C++/Kotlin модуля
+interface HearingAidEngineModule {
+  start(): void;
+  stop(): void;
+  setVolume(volume: number): void;
 }
 
-export function stopHearingAid() {
-  HearingAidEngine.stop();
-}
+const HearingAidEngine = requireNativeModule<HearingAidEngineModule>('HearingAidEngine');
+
+export default HearingAidEngine;
