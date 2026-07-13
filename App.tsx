@@ -1,16 +1,42 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-// Модуль мы создадим на следующем шаге, пока просто импортируем его
+import { StyleSheet, Text, View, TouchableOpacity, PermissionsAndroid, Platform, Alert } from 'react-native';
 import { startHearingAid, stopHearingAid } from './modules/hearing-aid-engine';
 
 export default function App() {
   const [isActive, setIsActive] = useState(false);
 
-  const toggleHearingAid = () => {
-    if (isActive) {
-      stopHearingAid();
-    } else {
+  const requestMicrophonePermission = async () => {
+    if (Platform.OS !== 'android') return true;
+    
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        {
+          title: "Доступ к микрофону",
+          message: "Приложению нужен доступ к микрофону, чтобы усиливать окружающие звуки для наушников.",
+          buttonNeutral: "Позже",
+          buttonNegative: "Отмена",
+          buttonPositive: "Разрешить",
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  };
+
+  const toggleHearingAid = async () => {
+    if (!isActive) {
+      // Проверяем/запрашиваем разрешение перед стартом
+      const hasPermission = await requestMicrophonePermission();
+      if (!hasPermission) {
+        Alert.alert("Ошибка", "Без доступа к микрофону слуховой аппарат не сможет работать.");
+        return;
+      }
       startHearingAid();
+    } else {
+      stopHearingAid();
     }
     setIsActive(!isActive);
   };
@@ -53,15 +79,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
-  buttonStart: {
-    backgroundColor: '#2e7d32',
-  },
-  buttonStop: {
-    backgroundColor: '#c62828',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
+  buttonStart: { backgroundColor: '#2e7d32' },
+  buttonStop: { backgroundColor: '#c62828' },
+  buttonText: { color: 'white', fontSize: 22, fontWeight: 'bold' },
 });
