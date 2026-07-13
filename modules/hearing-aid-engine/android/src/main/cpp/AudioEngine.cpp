@@ -8,7 +8,6 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
-// Структура цифрового фильтра BiQuad для частотной коррекции
 struct BiQuadFilter {
     float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
     float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
@@ -37,10 +36,8 @@ struct BiQuadFilter {
 class HearingAidEngine : public oboe::AudioStreamDataCallback {
 public:
     void start() {
-        // Защита от повторного запуска
         if (playStream || recordStream) return;
 
-        // 1. Настраиваем ВЫХОДНОЙ поток (Воспроизведение в наушники)
         oboe::AudioStreamBuilder outBuilder;
         outBuilder.setDirection(oboe::Direction::Output)
                   ->setSharingMode(oboe::SharingMode::Shared)
@@ -56,17 +53,15 @@ public:
         }
 
         int32_t sampleRate = playStream->getSampleRate();
-        // Настройка фильтра: поднимаем частоты выше 3000 Гц на +12 Дб для четкости речи
         highSpeechFilter.configureHighShelf(sampleRate, 3000.0f, 12.0f);
 
-        // 2. Настраиваем ВХОДНОЙ поток (Запись с микрофона)
         oboe::AudioStreamBuilder inBuilder;
         inBuilder.setDirection(oboe::Direction::Input)
                  ->setSharingMode(oboe::SharingMode::Shared)
                  ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
                  ->setFormat(oboe::AudioFormat::Float)
                  ->setChannelCount(oboe::ChannelCount::Mono)
-                 ->setSampleRate(sampleRate); // Частоты должны строго совпадать
+                 ->setSampleRate(sampleRate);
 
         result = inBuilder.openStream(recordStream);
         if (result != oboe::Result::OK) {
@@ -76,10 +71,9 @@ public:
             return;
         }
 
-        // Запускаем оба потока одновременно
         recordStream->requestStart();
         playStream->requestStart();
-        LOGD("Аудио-движок Full Duplex успешно запущен");
+        LOGD("Аудио-движок запущен");
     }
 
     void stop() {
@@ -96,7 +90,6 @@ public:
         LOGD("Аудио-движок остановлен");
     }
 
-    // Этот метод вызывается системой Oboe каждый раз, когда наушники готовы принять порцию звука
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
         float *floatData = static_cast<float *>(audioData);
 
@@ -105,7 +98,6 @@ public:
             return oboe::DataCallbackResult::Continue;
         }
 
-        // Мгновенно читаем сырой звук из микрофона прямо в буфер воспроизведения (таймаут 0)
         auto result = recordStream->read(floatData, numFrames, 0);
         
         if (!result) {
@@ -118,19 +110,13 @@ public:
             std::fill(floatData + framesRead, floatData + numFrames, 0.0f);
         }
 
-        // Алгоритм DSP обработки звука в реальном времени
-        float masterGain = 2.0f; // Коэффициент общего усиления звука
+        float masterGain = 2.0f; 
         
         for (int i = 0; i < framesRead; ++i) {
             float sample = floatData[i];
-
-            // Пропускаем через эквалайзер высоких частот (акцент на речь)
             sample = highSpeechFilter.process(sample);
-
-            // Применяем громкость
             float processedSample = sample * masterGain;
             
-            // Защитный лимитер: не дает звуку превысить безопасный порог amplitudes
             if (processedSample > 0.8f) processedSample = 0.8f;
             if (processedSample < -0.8f) processedSample = -0.8f;
             
@@ -148,7 +134,7 @@ private:
 
 static HearingAidEngine engine;
 
-// Правильная JNI-склейка функций под архитектуру нашего Kotlin-модуля
+// ИСПРАВЛЕНО: Чистые имена для связи с Kotlin без префиксов пакетов
 extern "C" {
     JNIEXPORT void JNICALL
     Java_com_hearingaid_HearingAidEngineModule_startEngine(JNIEnv *env, jobject thiz) {
