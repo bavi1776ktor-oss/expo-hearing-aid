@@ -53,6 +53,7 @@ public:
         }
 
         int32_t sampleRate = playStream->getSampleRate();
+        // Поднимаем высокие частоты речи (+12 Дб) для лучшей разборчивости
         highSpeechFilter.configureHighShelf(sampleRate, 3000.0f, 12.0f);
 
         oboe::AudioStreamBuilder inBuilder;
@@ -110,15 +111,21 @@ public:
             std::fill(floatData + framesRead, floatData + numFrames, 0.0f);
         }
 
-        float masterGain = 2.0f; 
+        // Увеличили коэффициент с 2.0f до 6.0f для мощного усиления микрофона
+        float masterGain = 6.0f; 
         
         for (int i = 0; i < framesRead; ++i) {
             float sample = floatData[i];
+            
+            // Фильтр высоких частот для голоса
             sample = highSpeechFilter.process(sample);
+            
+            // Усиление чувствительности
             float processedSample = sample * masterGain;
             
-            if (processedSample > 0.8f) processedSample = 0.8f;
-            if (processedSample < -0.8f) processedSample = -0.8f;
+            // Защитный лимитер (не дает звуку «взрывать» уши при резких стуках)
+            if (processedSample > 0.95f) processedSample = 0.95f;
+            if (processedSample < -0.95f) processedSample = -0.95f;
             
             floatData[i] = processedSample;
         }
@@ -134,7 +141,6 @@ private:
 
 static HearingAidEngine engine;
 
-// ИСПРАВЛЕНО: Чистые имена для связи с Kotlin без префиксов пакетов
 extern "C" {
     JNIEXPORT void JNICALL
     Java_com_hearingaid_HearingAidEngineModule_startEngine(JNIEnv *env, jobject thiz) {
