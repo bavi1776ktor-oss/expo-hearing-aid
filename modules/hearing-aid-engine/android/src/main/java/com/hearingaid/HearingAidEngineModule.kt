@@ -19,22 +19,24 @@ class HearingAidEngineModule : Module() {
         Name("HearingAidEngine")
 
         Function("start") {
-            // Запускаем C++ движок
             startEngine()
-            // Запускаем фоновый сервис
             val intent = Intent(context, HearingAidService::class.java).apply { action = "START" }
             context.startService(intent)
         }
 
         Function("stop") {
-            // Останавливаем C++ движок
             stopEngine()
-            // Останавливаем фоновый сервис
             val intent = Intent(context, HearingAidService::class.java).apply { action = "STOP" }
             context.startService(intent)
+        }
+
+        // Добавляем функцию управления громкостью, которая принимает дробное число
+        Function("setVolume") { volume: Double ->
+            setEngineVolume(volume.toFloat())
         }
     }
 
     private external fun startEngine()
     private external fun stopEngine()
+    private external fun setEngineVolume(volume: Float)
 }
