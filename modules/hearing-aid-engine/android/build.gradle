@@ -2,7 +2,6 @@ apply plugin: 'com.android.library'
 
 android {
     compileSdkVersion 34
-    // ДОБАВИЛИ ЭТУ СТРОКУ, чтобы исправить ошибку Gradle:
     namespace "com.hearingaid" 
 
     defaultConfig {
@@ -27,6 +26,7 @@ android {
     }
 
     dependencies {
-        implementation "google.oboe:oboe:1.9.3"
+        // ИСПРАВЛЕНО: Добавили com. в начало группы
+        implementation "com.google.oboe:oboe:1.9.3"
     }
 }
