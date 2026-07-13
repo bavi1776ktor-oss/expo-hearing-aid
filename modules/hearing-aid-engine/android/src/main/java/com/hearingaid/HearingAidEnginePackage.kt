@@ -1,11 +1,11 @@
 package com.hearingaid
 
 import android.content.Context
-import expo.modules.core.BasePackage
-import expo.modules.core.ExportedModule
+import expo.modules.core.interfaces.Package
+import expo.modules.core.interfaces.InternalModule
 
-class HearingAidEnginePackage : BasePackage() {
-    override fun createExportedModules(context: Context): List<ExportedModule> {
+class HearingAidEnginePackage : Package {
+    override fun createInternalModules(context: Context): List<InternalModule> {
         return emptyList()
     }
 }
