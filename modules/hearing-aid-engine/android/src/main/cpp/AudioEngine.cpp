@@ -38,6 +38,7 @@ public:
     void start() {
         if (playStream || recordStream) return;
 
+        // ВЫХОДНОЙ ПОТОК
         oboe::AudioStreamBuilder outBuilder;
         outBuilder.setDirection(oboe::Direction::Output)
                   ->setSharingMode(oboe::SharingMode::Shared)
@@ -53,16 +54,19 @@ public:
         }
 
         int32_t sampleRate = playStream->getSampleRate();
-        // Поднимаем высокие частоты речи (+12 Дб) для лучшей разборчивости
-        highSpeechFilter.configureHighShelf(sampleRate, 3000.0f, 12.0f);
+        highSpeechFilter.configureHighShelf(sampleRate, 3000.0f, 10.0f);
 
+        // ВХОДНОЙ ПОТОК (Микрофон)
         oboe::AudioStreamBuilder inBuilder;
         inBuilder.setDirection(oboe::Direction::Input)
                  ->setSharingMode(oboe::SharingMode::Shared)
                  ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
                  ->setFormat(oboe::AudioFormat::Float)
                  ->setChannelCount(oboe::ChannelCount::Mono)
-                 ->setSampleRate(sampleRate);
+                 ->setSampleRate(sampleRate)
+                 // ВАЖНО: Установка аудио-пресета VoiceRecognition отключает агрессивные 
+                 // фильтры подавления окружающих звуков, позволяя слышать на расстоянии.
+                 ->setInputPreset(oboe::InputPreset::VoiceRecognition);
 
         result = inBuilder.openStream(recordStream);
         if (result != oboe::Result::OK) {
@@ -74,7 +78,7 @@ public:
 
         recordStream->requestStart();
         playStream->requestStart();
-        LOGD("Аудио-движок запущен");
+        LOGD("Аудио-движок запущен в режиме VoiceRecognition");
     }
 
     void stop() {
@@ -100,7 +104,6 @@ public:
         }
 
         auto result = recordStream->read(floatData, numFrames, 0);
-        
         if (!result) {
             std::fill_n(floatData, numFrames, 0.0f);
             return oboe::DataCallbackResult::Continue;
@@ -111,21 +114,27 @@ public:
             std::fill(floatData + framesRead, floatData + numFrames, 0.0f);
         }
 
-        // Увеличили коэффициент с 2.0f до 6.0f для мощного усиления микрофона
-        float masterGain = 6.0f; 
-        
+        // Динамический компрессор (АРУ) для дальних звуков
         for (int i = 0; i < framesRead; ++i) {
             float sample = floatData[i];
             
             // Фильтр высоких частот для голоса
             sample = highSpeechFilter.process(sample);
             
-            // Усиление чувствительности
-            float processedSample = sample * masterGain;
+            // Вычисляем абсолютное значение амплитуды
+            float absSample = std::abs(sample);
+            float currentGain = 6.0f; // Базовое высокое усиление для дальних звуков
             
-            // Защитный лимитер (не дает звуку «взрывать» уши при резких стуках)
-            if (processedSample > 0.95f) processedSample = 0.95f;
-            if (processedSample < -0.95f) processedSample = -0.95f;
+            // Если звук громкий (близкий), плавно снижаем коэффициент, чтобы не хрипело
+            if (absSample > 0.05f) {
+                currentGain = 1.0f + (0.25f / absSample);
+            }
+            
+            float processedSample = sample * currentGain;
+            
+            // Защитный лимитер
+            if (processedSample > 0.9f) processedSample = 0.9f;
+            if (processedSample < -0.9f) processedSample = -0.9f;
             
             floatData[i] = processedSample;
         }
