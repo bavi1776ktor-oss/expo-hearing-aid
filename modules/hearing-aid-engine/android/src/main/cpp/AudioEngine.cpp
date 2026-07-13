@@ -38,7 +38,6 @@ public:
     void start() {
         if (playStream || recordStream) return;
 
-        // ВЫХОДНОЙ ПОТОК
         oboe::AudioStreamBuilder outBuilder;
         outBuilder.setDirection(oboe::Direction::Output)
                   ->setSharingMode(oboe::SharingMode::Shared)
@@ -56,7 +55,6 @@ public:
         int32_t sampleRate = playStream->getSampleRate();
         highSpeechFilter.configureHighShelf(sampleRate, 3000.0f, 10.0f);
 
-        // ВХОДНОЙ ПОТОК (Микрофон)
         oboe::AudioStreamBuilder inBuilder;
         inBuilder.setDirection(oboe::Direction::Input)
                  ->setSharingMode(oboe::SharingMode::Shared)
@@ -64,8 +62,6 @@ public:
                  ->setFormat(oboe::AudioFormat::Float)
                  ->setChannelCount(oboe::ChannelCount::Mono)
                  ->setSampleRate(sampleRate)
-                 // ВАЖНО: Установка аудио-пресета VoiceRecognition отключает агрессивные 
-                 // фильтры подавления окружающих звуков, позволяя слышать на расстоянии.
                  ->setInputPreset(oboe::InputPreset::VoiceRecognition);
 
         result = inBuilder.openStream(recordStream);
@@ -78,7 +74,7 @@ public:
 
         recordStream->requestStart();
         playStream->requestStart();
-        LOGD("Аудио-движок запущен в режиме VoiceRecognition");
+        LOGD("Аудио-движок успешно запущен");
     }
 
     void stop() {
@@ -93,6 +89,11 @@ public:
             recordStream.reset();
         }
         LOGD("Аудио-движок остановлен");
+    }
+
+    // Метод для обновления громкости из интерфейса
+    void setVolume(float volume) {
+        customVolume = std::max(0.0f, std::min(volume, 2.0f));
     }
 
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
@@ -114,27 +115,28 @@ public:
             std::fill(floatData + framesRead, floatData + numFrames, 0.0f);
         }
 
-        // Динамический компрессор (АРУ) для дальних звуков
+        // Повысили базовое усиление компрессора до 12.0f для экстремальной чувствительности вдаль
+        float baseGain = 12.0f; 
+        
         for (int i = 0; i < framesRead; ++i) {
             float sample = floatData[i];
             
-            // Фильтр высоких частот для голоса
             sample = highSpeechFilter.process(sample);
             
-            // Вычисляем абсолютное значение амплитуды
             float absSample = std::abs(sample);
-            float currentGain = 6.0f; // Базовое высокое усиление для дальних звуков
+            float currentGain = baseGain;
             
-            // Если звук громкий (близкий), плавно снижаем коэффициент, чтобы не хрипело
-            if (absSample > 0.05f) {
-                currentGain = 1.0f + (0.25f / absSample);
+            // Динамическое сжатие (АРУ): если звук рядом громкий, глушим его
+            if (absSample > 0.02f) {
+                currentGain = 1.0f + (0.22f / absSample);
             }
             
-            float processedSample = sample * currentGain;
+            // Применяем компрессию + независимый уровень громкости от ползунка
+            float processedSample = sample * currentGain * customVolume;
             
-            // Защитный лимитер
-            if (processedSample > 0.9f) processedSample = 0.9f;
-            if (processedSample < -0.9f) processedSample = -0.9f;
+            // Жесткий защитный лимитер
+            if (processedSample > 0.92f) processedSample = 0.92f;
+            if (processedSample < -0.92f) processedSample = -0.92f;
             
             floatData[i] = processedSample;
         }
@@ -146,6 +148,7 @@ private:
     std::shared_ptr<oboe::AudioStream> playStream;
     std::shared_ptr<oboe::AudioStream> recordStream;
     BiQuadFilter highSpeechFilter;
+    float customVolume = 1.0f; // Громкость по умолчанию (100%)
 };
 
 static HearingAidEngine engine;
@@ -159,5 +162,10 @@ extern "C" {
     JNIEXPORT void JNICALL
     Java_com_hearingaid_HearingAidEngineModule_stopEngine(JNIEnv *env, jobject thiz) {
         engine.stop();
+    }
+
+    JNIEXPORT void JNICALL
+    Java_com_hearingaid_HearingAidEngineModule_setEngineVolume(JNIEnv *env, jobject thiz, jfloat volume) {
+        engine.setVolume(volume);
     }
 }
