@@ -1,4 +1,5 @@
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android' // ДОБАВИЛИ ПЛАГИН ДЛЯ ПОДДЕРЖКИ KOTLIN
 
 android {
     compileSdkVersion 34
@@ -26,7 +27,8 @@ android {
     }
 
     dependencies {
-        // ИСПРАВЛЕНО: Добавили com. в начало группы
         implementation "com.google.oboe:oboe:1.9.3"
+        // Подключаем стандартную нативную библиотеку Expo Modules
+        implementation project(':expo-modules-core') 
     }
 }
