@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { Audio } from 'expo-av';
-import HearingAidEngine from './modules/hearing-aid-engine/index';
+import { requireNativeModule } from 'expo-modules-core';
+
+// Безопасно инициализируем модуль прямо внутри App.tsx, 
+// чтобы Metro не путался в относительных путях к папкам
+let HearingAidEngine: any = null;
+try {
+  HearingAidEngine = requireNativeModule('HearingAidEngine');
+} catch (e) {
+  console.error("Не удалось загрузить нативный модуль HearingAidEngine:", e);
+}
 
 export default function App() {
   const [isActive, setIsActive] = useState<boolean>(false);
@@ -9,14 +18,21 @@ export default function App() {
 
   useEffect(() => {
     // При изменении стейта громкости отправляем её в C++ движок
-    try {
-      HearingAidEngine.setVolume(volume);
-    } catch (e) {
-      console.error("Ошибка установки громкости в движок:", e);
+    if (HearingAidEngine && typeof HearingAidEngine.setVolume === 'function') {
+      try {
+        HearingAidEngine.setVolume(volume);
+      } catch (e) {
+        console.error("Ошибка установки громкости в движок:", e);
+      }
     }
   }, [volume]);
 
   const toggleEngine = async (): Promise<void> => {
+    if (!HearingAidEngine) {
+      Alert.alert('Ошибка', 'Нативный аудио-движок не инициализирован.');
+      return;
+    }
+
     if (!isActive) {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
