@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { Audio } from 'expo-av';
-// @ts-ignore - игнорируем отсутствие декларации типов для кастомного нативного модуля
-import HearingAidEngine from './modules/hearing-aid-engine';
+import HearingAidEngine from './modules/hearing-aid-engine/index';
 
 export default function App() {
   const [isActive, setIsActive] = useState<boolean>(false);
@@ -10,7 +9,11 @@ export default function App() {
 
   useEffect(() => {
     // При изменении стейта громкости отправляем её в C++ движок
-    HearingAidEngine.setVolume(volume);
+    try {
+      HearingAidEngine.setVolume(volume);
+    } catch (e) {
+      console.error("Ошибка установки громкости в движок:", e);
+    }
   }, [volume]);
 
   const toggleEngine = async (): Promise<void> => {
@@ -20,11 +23,20 @@ export default function App() {
         Alert.alert('Ошибка', 'Необходим доступ к микрофону для работы слухового аппарата.');
         return;
       }
-      HearingAidEngine.start();
-      setIsActive(true);
+      try {
+        HearingAidEngine.start();
+        setIsActive(true);
+      } catch (e) {
+        Alert.alert('Ошибка', 'Не удалось запустить аудио-движок.');
+        console.error(e);
+      }
     } else {
-      HearingAidEngine.stop();
-      setIsActive(false);
+      try {
+        HearingAidEngine.stop();
+        setIsActive(false);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
