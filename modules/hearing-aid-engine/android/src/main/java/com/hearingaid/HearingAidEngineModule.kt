@@ -22,10 +22,6 @@ class HearingAidEngineModule : Module() {
         }
     }
 
-    // Убрали ключевое слово external, так как функции теперь вызываются напрямую внутри JNI
-    private fun startEngine() = Java_com_hearingaid_HearingAidEngineModule_startEngine()
-    private fun stopEngine() = Java_com_hearingaid_HearingAidEngineModule_stopEngine()
-
-    private external fun Java_com_hearingaid_HearingAidEngineModule_startEngine()
-    private external fun Java_com_hearingaid_HearingAidEngineModule_stopEngine()
+    private external fun startEngine()
+    private external fun stopEngine()
 }
