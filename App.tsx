@@ -1,49 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, AppState } from 'react-native';
 import { Audio } from 'expo-av';
-import { requireNativeModule } from 'expo-modules-core';
+import Slider from '@react-native-community/slider'; // ← добавь этот пакет
 
-// Безопасно инициализируем модуль прямо внутри App.tsx, 
-// чтобы Metro не путался в относительных путях к папкам
-let HearingAidEngine: any = null;
-try {
-  HearingAidEngine = requireNativeModule('HearingAidEngine');
-} catch (e) {
-  console.error("Не удалось загрузить нативный модуль HearingAidEngine:", e);
-}
+// Импорт нативного модуля
+const HearingAidEngine = requireNativeModule('HearingAidEngine');
 
 export default function App() {
-  const [isActive, setIsActive] = useState<boolean>(false);
-  const [volume, setVolume] = useState<number>(1.0); // 1.0 = 100% громкости по умолчанию
+  const [isActive, setIsActive] = useState(false);
+  const [volume, setVolume] = useState(1.0);        // Выходная громкость (0.0 - 2.0)
+  const [sensitivity, setSensitivity] = useState(1.0); // Чувствительность микрофона (0.5 - 3.0)
+  const appState = useRef(AppState.currentState);
 
+  // Обновление громкости в нативном движке
   useEffect(() => {
-    // При изменении стейта громкости отправляем её в C++ движок
-    if (HearingAidEngine && typeof HearingAidEngine.setVolume === 'function') {
-      try {
-        HearingAidEngine.setVolume(volume);
-      } catch (e) {
-        console.error("Ошибка установки громкости в движок:", e);
-      }
+    if (HearingAidEngine?.setVolume) {
+      HearingAidEngine.setVolume(volume);
     }
   }, [volume]);
 
-  const toggleEngine = async (): Promise<void> => {
+  // TODO: Добавить setSensitivity в нативный модуль позже
+  // useEffect(() => {
+  //   if (HearingAidEngine?.setSensitivity) {
+  //     HearingAidEngine.setSensitivity(sensitivity);
+  //   }
+  // }, [sensitivity]);
+
+  // Следим за сворачиванием приложения
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        // вернулись в приложение
+      } else if (isActive && nextAppState === 'background') {
+        // можно оставить работать в фоне
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => subscription.remove();
+  }, [isActive]);
+
+  const toggleEngine = async () => {
     if (!HearingAidEngine) {
-      Alert.alert('Ошибка', 'Нативный аудио-движок не инициализирован.');
+      Alert.alert('Ошибка', 'Нативный модуль не загружен');
       return;
     }
 
     if (!isActive) {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Ошибка', 'Необходим доступ к микрофону для работы слухового аппарата.');
+        Alert.alert('Доступ запрещён', 'Нужен микрофон для работы приложения');
         return;
       }
+
       try {
         HearingAidEngine.start();
         setIsActive(true);
       } catch (e) {
-        Alert.alert('Ошибка', 'Не удалось запустить аудио-движок.');
+        Alert.alert('Ошибка запуска', 'Не удалось запустить движок');
         console.error(e);
       }
     } else {
@@ -56,136 +70,63 @@ export default function App() {
     }
   };
 
-  // Изменение громкости кнопками на экране
-  const increaseVolume = (): void => {
-    setVolume((prev: number) => Math.min(prev + 0.2, 2.0)); // Максимум 200%
-  };
-
-  const decreaseVolume = (): void => {
-    setVolume((prev: number) => Math.max(prev - 0.2, 0.0)); // Минимум 0% (тишина)
-  };
-
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Слуховой Аппарат v2</Text>
-      
-      <TouchableOpacity 
-        style={[styles.button, isActive ? styles.buttonActive : styles.buttonInactive]} 
+      <Text style={styles.title}>Слуховой Аппарат</Text>
+
+      <TouchableOpacity
+        style={[styles.powerButton, isActive ? styles.active : styles.inactive]}
         onPress={toggleEngine}
       >
-        <Text style={styles.buttonText}>{isActive ? 'ВЫКЛ' : 'ВКЛ'}</Text>
+        <Text style={styles.powerText}>{isActive ? 'ВЫКЛЮЧИТЬ' : 'ВКЛЮЧИТЬ'}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.statusText}>
-        Статус: {isActive ? 'Работает в фоне' : 'Остановлен'}
+      <Text style={styles.status}>
+        Статус: {isActive ? '🟢 Работает' : '⚪ Остановлен'}
       </Text>
 
-      <View style={styles.volumeContainer}>
-        <Text style={styles.volumeLabel}>
-          Собственная громкость: {Math.round(volume * 100)}%
-        </Text>
-        
-        <View style={styles.controlsRow}>
-          <TouchableOpacity style={styles.volButton} onPress={decreaseVolume}>
-            <Text style={styles.volButtonText}>-</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${(volume / 2.0) * 100}%` }]} />
-          </View>
+      {/* Громкость на выходе */}
+      <View style={styles.sliderContainer}>
+        <Text style={styles.label}>Громкость: {Math.round(volume * 100)}%</Text>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={2}
+          value={volume}
+          onValueChange={setVolume}
+          minimumTrackTintColor="#03dac6"
+          maximumTrackTintColor="#555"
+          thumbTintColor="#03dac6"
+        />
+      </View>
 
-          <TouchableOpacity style={styles.volButton} onPress={increaseVolume}>
-            <Text style={styles.volButtonText}>+</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Чувствительность микрофона (пока placeholder) */}
+      <View style={styles.sliderContainer}>
+        <Text style={styles.label}>Чувствительность микрофона: {Math.round(sensitivity * 100)}%</Text>
+        <Slider
+          style={styles.slider}
+          minimumValue={0.5}
+          maximumValue={3.0}
+          value={sensitivity}
+          onValueChange={setSensitivity}
+          minimumTrackTintColor="#ff9800"
+          maximumTrackTintColor="#555"
+          thumbTintColor="#ff9800"
+        />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#121212',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 40,
-  },
-  button: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  buttonActive: {
-    backgroundColor: '#cf6679',
-  },
-  buttonInactive: {
-    backgroundColor: '#03dac6',
-  },
-  buttonText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
-  statusText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: '#bbbbbb',
-    marginBottom: 40,
-  },
-  volumeContainer: {
-    width: '100%',
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  volumeLabel: {
-    fontSize: 18,
-    color: '#ffffff',
-    marginBottom: 15,
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  volButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#333333',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  volButtonText: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  progressBarBg: {
-    flex: 1,
-    height: 12,
-    backgroundColor: '#222222',
-    borderRadius: 6,
-    marginHorizontal: 15,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#03dac6',
-    borderRadius: 6,
-  },
+  container: { flex: 1, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#fff', marginBottom: 40 },
+  powerButton: { width: 160, height: 160, borderRadius: 80, justifyContent: 'center', alignItems: 'center' },
+  active: { backgroundColor: '#cf6679' },
+  inactive: { backgroundColor: '#03dac6' },
+  powerText: { fontSize: 24, fontWeight: 'bold', color: '#000' },
+  status: { marginTop: 20, fontSize: 18, color: '#bbb' },
+  sliderContainer: { width: '100%', marginTop: 30 },
+  label: { color: '#fff', fontSize: 16, marginBottom: 10, textAlign: 'center' },
+  slider: { width: '100%', height: 40 },
 });
