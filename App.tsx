@@ -7,12 +7,11 @@ const HearingAidEngine = requireNativeModule('HearingAidEngine');
 
 export default function App() {
   const [isActive, setIsActive] = useState<boolean>(false);
-  const [volume, setVolume] = useState<number>(1.0);         // Выходная громкость (0.0 - 2.0)
-  const [sensitivity, setSensitivity] = useState<number>(1.0); // Чувствительность микрофона (0.5 - 3.0)
+  const [volume, setVolume] = useState<number>(1.0);
+  const [sensitivity, setSensitivity] = useState<number>(1.0);
 
   const appState = useRef(AppState.currentState);
 
-  // Обновляем громкость в нативном движке
   useEffect(() => {
     if (HearingAidEngine?.setVolume) {
       try {
@@ -23,12 +22,8 @@ export default function App() {
     }
   }, [volume]);
 
-  // Следим за состоянием приложения (чтобы корректно работать в фоне)
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', nextAppState => {
-      appState.current = nextAppState;
-    });
-
+    const subscription = AppState.addEventListener('change', () => {});
     return () => subscription.remove();
   }, []);
 
@@ -39,7 +34,6 @@ export default function App() {
     }
 
     if (!isActive) {
-      // Запрос разрешения на микрофон
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Доступ запрещён', 'Для работы нужен доступ к микрофону');
@@ -78,7 +72,6 @@ export default function App() {
         Статус: {isActive ? '🟢 Работает в фоне' : '⚪ Остановлен'}
       </Text>
 
-      {/* Громкость на выходе */}
       <View style={styles.sliderContainer}>
         <Text style={styles.label}>Громкость: {Math.round(volume * 100)}%</Text>
         <Slider
@@ -94,9 +87,8 @@ export default function App() {
         />
       </View>
 
-      {/* Чувствительность микрофона */}
       <View style={styles.sliderContainer}>
-        <Text style={styles.label}>Чувствительность микрофона: {Math.round(sensitivity * 100)}%</Text>
+        <Text style={styles.label}>Чувствительность: {Math.round(sensitivity * 100)}%</Text>
         <Slider
           style={styles.slider}
           minimumValue={0.5}
