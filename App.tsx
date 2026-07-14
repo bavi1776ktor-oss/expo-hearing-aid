@@ -12,6 +12,7 @@ export default function App() {
 
   const appState = useRef(AppState.currentState);
 
+  // Громкость
   useEffect(() => {
     if (HearingAidEngine?.setVolume) {
       try {
@@ -21,6 +22,17 @@ export default function App() {
       }
     }
   }, [volume]);
+
+  // Чувствительность микрофона
+  useEffect(() => {
+    if (HearingAidEngine?.setSensitivity) {
+      try {
+        HearingAidEngine.setSensitivity(sensitivity);
+      } catch (e) {
+        console.error("Ошибка setSensitivity:", e);
+      }
+    }
+  }, [sensitivity]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', () => {});
@@ -88,7 +100,7 @@ export default function App() {
       </View>
 
       <View style={styles.sliderContainer}>
-        <Text style={styles.label}>Чувствительность: {Math.round(sensitivity * 100)}%</Text>
+        <Text style={styles.label}>Чувствительность микрофона: {Math.round(sensitivity * 100)}%</Text>
         <Slider
           style={styles.slider}
           minimumValue={0.5}
