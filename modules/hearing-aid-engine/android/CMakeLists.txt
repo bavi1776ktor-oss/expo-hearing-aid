@@ -14,3 +14,10 @@ target_link_libraries(
         oboe::oboe
         log
 )
+
+# Оптимизации для аудио
+target_compile_options(hearing_aid_engine PRIVATE
+    -O3
+    -ffast-math
+    -fno-math-errno
+)
