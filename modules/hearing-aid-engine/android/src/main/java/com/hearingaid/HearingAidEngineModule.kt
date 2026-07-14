@@ -30,13 +30,18 @@ class HearingAidEngineModule : Module() {
             context.startService(intent)
         }
 
-        // Добавляем функцию управления громкостью, которая принимает дробное число
         Function("setVolume") { volume: Double ->
             setEngineVolume(volume.toFloat())
+        }
+
+        // Новая функция для чувствительности микрофона
+        Function("setSensitivity") { sensitivity: Double ->
+            setEngineSensitivity(sensitivity.toFloat())
         }
     }
 
     private external fun startEngine()
     private external fun stopEngine()
     private external fun setEngineVolume(volume: Float)
+    private external fun setEngineSensitivity(sensitivity: Float)  // новая внешняя функция
 }
