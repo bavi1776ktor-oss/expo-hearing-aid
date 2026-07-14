@@ -17,8 +17,8 @@ struct BiQuadFilter {
         float alpha = sin(w0) / 2.0f * sqrt(2.0f);
         float A = pow(10.0f, dbGain / 40.0f);
         float beta = sqrt(A) * 2.0f * alpha;
-
         float a0 = (A + 1.0f) - (A - 1.0f) * cos(w0) + beta;
+
         b0 = (A * ((A + 1.0f) + (A - 1.0f) * cos(w0) + beta)) / a0;
         b1 = (-2.0f * A * ((A - 1.0f) + (A + 1.0f) * cos(w0))) / a0;
         b2 = (A * ((A + 1.0f) + (A - 1.0f) * cos(w0) - beta)) / a0;
@@ -91,14 +91,16 @@ public:
         LOGD("Аудио-движок остановлен");
     }
 
-    // Метод для обновления громкости из интерфейса
-    void setVolume(float volume) {
-        customVolume = std::max(0.0f, std::min(volume, 2.0f));
+    void setVolume(float vol) {
+        customVolume = std::max(0.0f, std::min(vol, 2.0f));
+    }
+
+    void setSensitivity(float sens) {
+        microphoneSensitivity = std::max(0.5f, std::min(sens, 3.0f));
     }
 
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
         float *floatData = static_cast<float *>(audioData);
-
         if (!recordStream) {
             std::fill_n(floatData, numFrames, 0.0f);
             return oboe::DataCallbackResult::Continue;
@@ -115,32 +117,27 @@ public:
             std::fill(floatData + framesRead, floatData + numFrames, 0.0f);
         }
 
-        // Повысили базовое усиление компрессора до 12.0f для экстремальной чувствительности вдаль
-        float baseGain = 12.0f; 
-        
+        float baseGain = 8.0f;
+
         for (int i = 0; i < framesRead; ++i) {
-            float sample = floatData[i];
-            
+            float sample = floatData[i] * microphoneSensitivity;
+
             sample = highSpeechFilter.process(sample);
-            
+
             float absSample = std::abs(sample);
             float currentGain = baseGain;
-            
-            // Динамическое сжатие (АРУ): если звук рядом громкий, глушим его
+
             if (absSample > 0.02f) {
-                currentGain = 1.0f + (0.22f / absSample);
+                currentGain = 1.0f + (0.3f / absSample);
             }
-            
-            // Применяем компрессию + независимый уровень громкости от ползунка
+
             float processedSample = sample * currentGain * customVolume;
-            
-            // Жесткий защитный лимитер
-            if (processedSample > 0.92f) processedSample = 0.92f;
-            if (processedSample < -0.92f) processedSample = -0.92f;
-            
+
+            if (processedSample > 0.95f) processedSample = 0.95f;
+            if (processedSample < -0.95f) processedSample = -0.95f;
+
             floatData[i] = processedSample;
         }
-
         return oboe::DataCallbackResult::Continue;
     }
 
@@ -148,7 +145,8 @@ private:
     std::shared_ptr<oboe::AudioStream> playStream;
     std::shared_ptr<oboe::AudioStream> recordStream;
     BiQuadFilter highSpeechFilter;
-    float customVolume = 1.0f; // Громкость по умолчанию (100%)
+    float customVolume = 1.0f;
+    float microphoneSensitivity = 1.0f;
 };
 
 static HearingAidEngine engine;
@@ -167,5 +165,10 @@ extern "C" {
     JNIEXPORT void JNICALL
     Java_com_hearingaid_HearingAidEngineModule_setEngineVolume(JNIEnv *env, jobject thiz, jfloat volume) {
         engine.setVolume(volume);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_com_hearingaid_HearingAidEngineModule_setEngineSensitivity(JNIEnv *env, jobject thiz, jfloat sensitivity) {
+        engine.setSensitivity(sensitivity);
     }
 }
